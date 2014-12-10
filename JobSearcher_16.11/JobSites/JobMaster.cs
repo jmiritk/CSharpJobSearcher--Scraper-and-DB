@@ -3,12 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Web;
 using HtmlAgilityPack;
-using System.Text;
 using System.Net;
 using System.Text.RegularExpressions;
 
@@ -19,8 +15,6 @@ namespace JobSearcher_16._11
         public string SiteURL1 { get; set; }
         public string SiteURL2 { get; set; }
         public string CompleteSiteURL { get; set; }
-
-       // public int pageId;
         public String SpecificJobURL { get; set; }
 
         public JobMaster()
@@ -34,7 +28,6 @@ namespace JobSearcher_16._11
         {
             List<Job> jobs = new List<Job>();
             
-            //Job jm = new Job();
             WebClient GodLikeClient = new WebClient();
             HtmlAgilityPack.HtmlDocument document = new HtmlAgilityPack.HtmlDocument();
 
@@ -51,7 +44,6 @@ namespace JobSearcher_16._11
                 {
                     HtmlNode curnode = Hjob;
                     Job jmJob = new Job();
-                   // jmJob. = 1;
                     HtmlNode titleHolder = curnode.SelectSingleNode("tr[@class='jobTitle']//b");
                     jmJob.Title = titleHolder.InnerText.ToString();
                     HtmlNodeCollection desceHolders = curnode.SelectNodes("tr[@bgcolor='white']//div");
@@ -61,21 +53,22 @@ namespace JobSearcher_16._11
                         sbDesc.Append(" ");
                         sbDesc.Append(item.InnerText.ToString());
                     }
-                    //Job.
-                   // job.Description = sbDesc.ToString();
+                    jmJob.Description = sbDesc.ToString();
                     HtmlNode JobID = curnode.SelectSingleNode("tr[@class='jobTitle']//div[@style='position:absolute;margin-top:4px;margin-right:-18px;']");
                     string altId = JobID.GetAttributeValue("id", "");
                     jmJob.ID = getJobID(altId);
                     jmJob.URL = "http://www.jobmaster.co.il/code/check/checknum.asp?key=" + jmJob.ID;
-                    // jmJob.
 
                     HtmlNode Company = curnode.SelectSingleNode("tr[@bgcolor='white']//a/u/font");
                     if (Company != null)
                     {
-                      //  jmJob.Company = Company.InnerText;
+                        jmJob.Company = Company.InnerText;
+                    }
+                    else
+                    {
+                        jmJob.Company = "Not Available";
                     }
 
-                   // jm.InsertJob(jmJob);
                     jobs.Add(jmJob);
                 }
             }

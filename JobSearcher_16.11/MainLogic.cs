@@ -3,19 +3,28 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using MySql.Data.MySqlClient;
+using System.Data;
+using System.Web;
+using HtmlAgilityPack;
+using System.Globalization;
+
 
 namespace JobSearcher_16._11
 {
     public class MainLogic
     {
         public String[] BestSearchTerms = { "ללא נסיון", "מתחיל/ה", "מתחיל /ה", "ללא ניסיון", "ג'וניור", "Junior", "junior", "0-", "1-", "Up to", "up to", " עד ", "graduate", " שנת " };
-        public String[] BadTerms = { "בכיר/ה", "בכיר /ה", "ראש צוות", "Team Leader", "מנוסים /ות", "מנוסים/ות", "מנוסה", "מומח /ית", "בכיר /ה", "senior", "Senior", "team lead", "Team Lead", "Lead", "שנים", "years", "שנות", "expert", "Expert", "בכיר", "ר\"צ", "ש\"נ", "QA", "qa", "אוטומציה", "בדיק", "utomation", "Java", "JAVA", "PHP" };
-
+        public String[] BadTerms = { "בכיר/ה", "בכיר /ה", "ראש צוות", "Team Leader", "מנוסים /ות", "מנוסים/ות", "מנוסה", "מומח /ית", "בכיר /ה", "senior", "Senior", "team lead", "Team Lead", "Lead", "שנים", "years", "שנות", "expert", "Expert", "בכיר", "ר\"צ", "ש\"נ", "QA", "qa", "אוטומציה", "בדיק", "utomation", "Java", "JAVA", "מנהל","PHP" };
+        public String[] TableColumns ={"Id","Title","isRecommanded","URL","Company","CurrentStatus","UpdateSent"/*"ChangeDate","Irrelevant"*/};
         public int currentPageID { get; set; }
         // public event EventHandler CreateTable;
 
         public JobMaster jobMaster { get; set; }
-        public List<Job> RecommendedJobs { get; set; }
+        public AllJobs allJobs { get; set; }
+        public JobNet jobnet { get; set; }
+        public Drushim drushim { get; set; }
+        public Dictionary<string,Job> RecommendedJobs { get; set; }
         public List<Job> IrrelevantJobs { get; set; }
         string jobSiteChangedPage { get; set; }    
         public JobSite currentJobSite { get; set; }
@@ -26,32 +35,31 @@ namespace JobSearcher_16._11
         public string NumPagesLabel { get; set; }
         public bool wasPageIdChanged { get; set; }
         public bool CreateTable { get; set; }
-
+        public bool isPageValid { get; set; }
 
 
         public MainLogic()
         {
             wasPageIdChanged = false;
             currentPageID = 0;
+
             jobMaster = new JobMaster();
+            jobnet = new JobNet();
+            drushim = new Drushim();
+            allJobs = new AllJobs();
 
             IrrelevantJobs = new List<Job>();
-            RecommendedJobs = new List<Job>();
+            RecommendedJobs = new Dictionary<string,Job>();
 
 
             jobSiteChangedPage = "";
             sqlm = new Helpers.MySQLManager();
         }
 
-        public void changePageID(int i_id)
-        {
-            currentPageID= i_id;
-            wasPageIdChanged = true;
-        }
 
         private void checkIfPageWasChanged()
         {
-            if (wasPageIdChanged)
+            if (wasPageIdChanged && (currentJobSite.pageId<currentPageID))
             {
                 currentJobSite.pageId = currentPageID;
                 wasPageIdChanged = false;
@@ -61,26 +69,88 @@ namespace JobSearcher_16._11
         }
         public void JobMasterWasChosen()
         {
-            currentJobSite = jobMaster;
+            if (currentJobSite != jobMaster)
+            {
+                currentJobSite = jobMaster;
+            }
+
+            UpdateSite();
+        }
+
+        public void JobNetWasChosen()
+        {
+            if (currentJobSite != jobnet)
+            {
+                currentJobSite = jobnet;
+            }
+
+            UpdateSite();
+        }
+
+
+        public void DrushimWasChosen()
+        {
+            if (currentJobSite != drushim)
+            {
+                currentJobSite = drushim;
+            }
+
+            UpdateSite();
+        }
+
+        public void AllJobsWasChosen()
+        {
+            if (currentJobSite != allJobs)
+            {
+                currentJobSite = allJobs;
+            }
+
+            UpdateSite();
+        }
+
+        public void UpdateSite()
+        {
             CheckIfTableWasCreated();
             checkIfPageWasChanged();
-            string currentURL = jobMaster.createSiteURL();
+           isPageValid= ReadCurrentURL();
+           if (isPageValid == true)
+           {
+               updatePageID();
+           }
+        }
 
-            List<Job> jobsToSort = jobMaster.readJobs(currentURL);
+        public bool ReadCurrentURL()
+        {
             
-            SortJobs(jobsToSort);
+            string currentURL = currentJobSite.createSiteURL();
+            List<Job> jobsToSort = currentJobSite.readJobs(currentURL);
+            if (jobsToSort.Count > 0)
+            {
+                isPageValid = true;
+                SortJobs(jobsToSort);
+                return isPageValid;
+            }
+            else
+            {
+                isPageValid = false;
+                return isPageValid;
+            }
             
-            int idStr = jobMaster.pageId - 1;
-            NumPagesLabel = "JobMaster - Page No. " + idStr;
             
         }
 
+        private void updatePageID()
+        {
+            int idStr = currentJobSite.pageId - 1;
+            NumPagesLabel = currentJobSite.SiteName + " - Page No. " + idStr;
+
+        }
         private void CheckIfTableWasCreated()
         {
             if (CreateTable == true)
             {
                 CreateTable = false;
-                RecommendedJobs = new List<Job>();
+                RecommendedJobs = new Dictionary<string, Job>();
                 IrrelevantJobs = new List<Job>();
             }
         }
@@ -97,7 +167,7 @@ namespace JobSearcher_16._11
 
         public bool checkIfToCreateTable()
         {
-            if ((CreateTable == false) && (RecommendedJobs.Count >= 10))
+            if ((CreateTable == false) && ((RecommendedJobs.Count >= 10) || (isPageValid==false)))
             {
                 CreateTable = true;
                 return CreateTable;
@@ -113,7 +183,7 @@ namespace JobSearcher_16._11
          private bool checkIfRecommanded(Job i_currentJob)
         {
             Job currentJob = i_currentJob;
-            string info = currentJob.Requirements;
+            string info = currentJob.Description;
             string title = currentJob.Title;
             bool isBest = false;
             for (int i = 0; i < BestSearchTerms.Length; i++)
@@ -171,7 +241,8 @@ namespace JobSearcher_16._11
          public void changetoIrrelevant(string i_currentJobID)
          {
              sqlm.changeJobtoIrrelevat(currentJobSite.SiteName, i_currentJobID);
-             sqlm.insertJobToTable(currentJobSite.SiteName, i_currentJobID);
+
+             sqlm.insertJobToTable(currentJobSite.SiteName, RecommendedJobs[i_currentJobID]);
          }
 
          public string checkIfSent(string i_currentJobID)
@@ -187,15 +258,9 @@ namespace JobSearcher_16._11
                  if (Relevancy == "2")
                  {
                      isRelevant = false;
-                     //return "Irrelevant";
                  }
                  if (dateSTR != null)
                  {
-                     DateTime LastSent = Convert.ToDateTime(dateSTR);
-                     TimeSpan tspan = today - LastSent;
-                     if (isRelevant == true)
-                     {
-
                          if (dateSTR == "0/0/0000 00:00:00")
                          {
                              return "Viewed Not Sent";
@@ -205,6 +270,13 @@ namespace JobSearcher_16._11
                          {
                              return "Not Viewed";
                          }
+
+                         DateTime LastSent = Convert.ToDateTime(dateSTR);
+                         TimeSpan tspan = today - LastSent;
+
+                  if (isRelevant == true)
+                  {
+                         
 
                          if (tspan.TotalDays > 30)
                          {
@@ -248,7 +320,7 @@ namespace JobSearcher_16._11
          {
              try
              {
-                 sqlm.insertJobToTable(currentJobSite.SiteName, i_currentJobID);
+                 sqlm.insertJobToTable(currentJobSite.SiteName, RecommendedJobs[i_currentJobID]);
              }
              catch (Exception e)
              {
@@ -260,7 +332,7 @@ namespace JobSearcher_16._11
          {
              try
              {
-                 sqlm.insertJobViewedToTable(currentJobSite.SiteName, i_currentJobID);
+                 sqlm.insertJobViewedToTable(currentJobSite.SiteName, RecommendedJobs[i_currentJobID]);
              }
              catch (Exception e)
              {
@@ -282,7 +354,15 @@ namespace JobSearcher_16._11
          {
              //Job currentJob = i_currentJob;
              Job job = i_Job;
-             bool isbest = checkIfRecommanded(job);
+             bool isbest;
+             if (currentJobSite.SiteName == "Drushim")
+             {
+                 isbest = drushim.checkIfRecommanded(job);
+             }
+             else
+             {
+                 isbest = checkIfRecommanded(job);
+             }
 
              //if non of the terms was in the array
              if (isbest == false)
@@ -296,28 +376,17 @@ namespace JobSearcher_16._11
                      job.Status = checkIfSent(i_Job.ID);
                      if ((job.Status != "Sent") && (job.Status != "Irrelevant"))
                        {
-                           RecommendedJobs.Add(job);
+                         if(RecommendedJobs.ContainsKey(job.ID))
+                         {
+                             job.ID +="Exist";
+                         }
+                           RecommendedJobs.Add(job.ID,job);
                        }
                  }
                  catch (Exception e)
                  {
                      throw (e);
                  }
-                 /*  if (currentJobSite.SiteName == "Drushim")
-                   {
-                       if ((job.Status != "Sent") && (job.Status != "Irrelevant") && (job.Status != "Sent over 1 week"))
-                       {
-                           re.Add(job);
-                       }
-                   }
-                   else
-                   {
-                       if ((currentJob.Status != "Sent") && (currentJob.Status != "Irrelevant"))
-                       {
-                           RecommendedJobs.Add(currentJob);
-                       }
-
-                   }*/
              }
 
          }
